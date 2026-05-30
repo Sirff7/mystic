@@ -7,9 +7,9 @@ app = FastAPI()
 local_db = "dbname=learning"
 _email_re = r"[a-zA-Z0-9._%+-]+@[a-zA-Z0-9.-]+\.[a-zA-Z]{2,}"
 
-@app.get("/health")
-async def read_root():
-    return {"Hello": "World"}
+# @app.get("/health")
+# async def read_root():
+#     return {"Hello": "World"}
 
 class signup_request_body (BaseModel):
     email: str
@@ -19,13 +19,13 @@ class signup_request_body (BaseModel):
 async def handle_signup(body: signup_request_body):
     is_email = re.fullmatch(_email_re, body.email)
     if is_email is None:
-        raise HTTPException(status_code=400, detail="email not valid")
+        raise HTTPException(status_code=400, detail="mail not valid")
     
     conn = psycopg2.connect(local_db)
     cur = conn.cursor()
     cur.execute(
         """
-        INSERT INTO users (email, password_hash)
+        INSERT INTO Users (email, password)
         VALUES (%s, %s)
         RETURNING user_id;
         """,
@@ -34,38 +34,40 @@ async def handle_signup(body: signup_request_body):
     user_id = cur.fetchone()[0]
     cur.execute(
         """
-        INSERT INTO profiles (display_name, bio, user_id, zodiac)
-        VALUES (NULL, NULL, %s, NULL);
+        INSERT INTO Profiles (display_name, bio, user_id, zodiac)
+        VALUES (NULL, NULL, %s, NULL)
+        RETURNING profile_id;
         """,
-        (user_id),
+        (user_id,)
     )
+    profile_id = cur.fetchone()[0]
     conn.commit()
     cur.close()
     conn.close()
 
-    return {"status": "signup - ok"}
+    return {"status": "signup - ok", "user_id": user_id, "profile_id": profile_id}
 
 class login_request_body (BaseModel):
     email: str
     password: str
 
-@app.post ("/login", status_code=200)
+@app.get ("/users", status_code=200)
 async def handle_login(body: login_request_body):
     conn = psycopg2.connect(local_db)
     cur = conn.cursor()
     cur.execute(
         """
-        SELECT user_id FROM users
+        SELECT user_id FROM Users
         WHERE email=%s AND password=%s;
         """,
-        (body.email, body.password),
+        (body.email, body.password)
     )
     user=cur.fetchone()
     cur.close()
     conn.close()
     
     if user is None:
-        raise HTTPException(status_code=404, detail="Profile not found")
+        raise HTTPException(status_code=401, detail="unauthenticated")
 
     return {"status": "login - ok", "user_id": user[0]}
 
@@ -75,16 +77,16 @@ class update_profile_body (BaseModel):
     zodiac: str
 
 @app.put ("/profiles/{profile_id}", status_code=200)
-async def update_profile(body: update_profile_body):
+async def update_profile(profile_id: int, body: update_profile_body):
     conn = psycopg2.connect(local_db)
     cur = conn.cursor()
     cur.execute(
         """
-        UPDATE profiles
+        UPDATE Profiles
         SET display_name=%s, bio=%s, zodiac=%s 
         WHERE profile_id=%s;
         """,
-        (body.display_name, body.bio, body.zodiac, profile_id),
+        (body.display_name, body.bio, body.zodiac, profile_id)
     )
     conn.commit()
     cur.close()
@@ -99,7 +101,7 @@ async def show_profile(profile_id:int):
 
     cur.execute("""
         SELECT profile_id, display_name, bio, zodiac
-        FROM profiles
+        FROM Profiles
         WHERE profile_id = %s
         """,
         (profile_id,))
@@ -109,7 +111,7 @@ async def show_profile(profile_id:int):
     conn.close()
 
     if profile is None:
-        raise HTTPException(status_code=404, detail="Profile not found")
+        raise HTTPException(status_code=404, detail="profile not found")
     
     return{
         "profile_id": profile[0],
@@ -119,20 +121,21 @@ async def show_profile(profile_id:int):
     }
 
 @app.delete ("/users/{user_id}", status_code=200)
-async def delete_profile (user_id:int):
+async def delete_account (user_id:int):
     conn = psycopg2.connect(local_db)
     cur = conn.cursor()
     cur.execute("""
-        DELETE FROM users
+        DELETE FROM Users
         WHERE user_id = %s
         """,
-        (user_id,))
+        (user_id,)
+        )
     conn.commit()
     rows_affected = cur.rowcount
     cur.close()
     conn.close()
     if rows_affected == 0:
-        return {"status": "no user to delete"}
+        raise HTTPException(status_code=404, detail="user not found")
     return{"status": "user and profile deleted"}
 
 @app.get ("/discoveries/{profile_id}", status_code=200)
@@ -142,33 +145,30 @@ async def discover(profile_id:int):
 
     cur.execute("""
         SELECT zodiac 
-        FROM profiles
+        FROM Profiles
         WHERE profile_id = %s
         """,
         (profile_id,) 
     )
     result = cur.fetchone()
     if result is None:
-        raise HTTPException(status_code=404, detail="Profile not found")
+        raise HTTPException(status_code=404, detail="profile not found")
     current_zodiac = result[0]
 
     cur.execute("""
         SELECT p.profile_id, p.display_name, p.bio, p.zodiac
-        FROM profiles p
-        JOIN matches m ON (m.zodiac_1=%s AND m.zodiac_2=p.zodiac)
-                OR (m.zodiac_1=p.zodiac AND m.zodiac_2=%s)
-        WHERE m.does_match = TRUE
-                AND p.profile_id!= %s
-                AND p.profile_id NOT IN (SELECT liked FROM likes WHERE liker=%s)
+        FROM Profiles p
+        JOIN Matches m ON (m.zodiac_1=%s AND m.zodiac_2=p.zodiac)
+        WHERE p.profile_id!= %s AND p.profile_id NOT IN (SELECT liked FROM Likes WHERE liker=%s)
         LIMIT 1;
         """,
-        (current_zodiac, current_zodiac, profile_id, profile_id))
+        (current_zodiac, profile_id, profile_id))
     profile = cur.fetchone()
     cur.close()
     conn.close()
 
     if profile is None:
-        return{"status": "no more profiles"}
+        return{"status": "no more compatible profiles available"}
     return{
         "profile_id": profile[0],
         "display_name": profile[1],
@@ -187,11 +187,11 @@ async def handle_likes(body: likes_body):
     cur = conn.cursor()
     cur.execute(
         """
-        INSERT INTO likes (liker, liked, likes_status)
+        INSERT INTO Likes (liker, liked, likes_status)
         VALUES (%s, %s, %s)
         RETURNING likes_status;
         """,
-        (body.liker, body.liked, body.likes_status),
+        (body.liker, body.liked, body.likes_status)
     )
     liker_likes = cur.fetchone()[0]
 
@@ -199,7 +199,7 @@ async def handle_likes(body: likes_body):
         cur.execute(
             """
             SELECT l.likes_status
-            FROM likes l
+            FROM Likes l
             WHERE l.liker=%s AND l.liked=%s;
             """,
             (body.liked, body.liker),
@@ -208,7 +208,7 @@ async def handle_likes(body: likes_body):
         if liked_likes is not None and liked_likes[0]==1:
             cur.execute(
             """
-            INSERT INTO paired_with (profile_1, profile_2)
+            INSERT INTO Paired_with (profile_1, profile_2)
             VALUES (%s, %s);
             """,
             (body.liker, body.liked),
@@ -227,7 +227,7 @@ async def present_couples(profile_id:int):
 
     cur.execute("""
                 SELECT *
-                FROM paired_with
+                FROM Paired_with
                 WHERE profile_1=%s OR profile_2=%s
                 """,
                 (profile_id, profile_id)
