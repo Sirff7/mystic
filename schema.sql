@@ -27,7 +27,7 @@ CREATE TABLE Zodiacs
 
 CREATE TABLE Profiles
     (profile_id INT,
-    display_name VARCHAR(20) UNIQUE,
+    display_name VARCHAR(255),
     bio VARCHAR(1000),
     zodiac VARCHAR(20),
     PRIMARY KEY (profile_id),

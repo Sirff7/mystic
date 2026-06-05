@@ -4,14 +4,98 @@ from pydantic import BaseModel, Field
 import re
 import bcrypt
 from typing import Annotated
+from contextlib import asynccontextmanager
+from fastapi.middleware.cors import CORSMiddleware
 
-app = FastAPI()
-local_db = "dbname=learning"
+local_db = "dbname=mystic"
 _email_re = r"[a-zA-Z0-9._%+-]+@[a-zA-Z0-9.-]+\.[a-zA-Z]{2,}"
 
-# @app.get("/health")
-# async def read_root():
-#     return {"Hello": "World"}
+# DATA for seeding:
+raw_users = [
+    (1, "anders@mail.com", "password1"),
+    (2, "bente@mail.com", "password2"),
+    (3, "cordelia@mail.com", "password3"),
+    (4, "dorit@mail.com", "password4"),
+    (5, "egon@mail.com", "password5"),
+    (6, "filip@mail.com", "password6"),
+    (7, "gudrun@mail.com", "password7"),
+    (8, "holli@mail.com", "password8"),
+    (9, "inge@mail.com", "password9"),
+    (10, "jakob@mail.com", "password10"),
+]
+users = [
+    (user_id, email, bcrypt.hashpw(password.encode(), bcrypt.gensalt()).decode())
+    for user_id, email, password in raw_users
+]
+profiles = [
+    (1, "anders", "Loves hiking", "Aries"),
+    (2, "bente", "Coffee addict", "Leo"),
+    (3, "cordelia", "Book worm", "Sagittarius"),
+    (4, "dorit", "Film nerd", "Taurus"),
+    (5, "egon", "Cat person", "Virgo"),
+    (6, "filip", "Gym rat", "Capricorn"),
+    (7, "gudrun", "Foodie", "Gemini"),
+    (8, "holli", "Music lover", "Libra"),
+    (9, "inge", "Travel junkie", "Cancer"),
+    (10, "jakob", "Gamer", "Scorpio"),
+]
+likes = [
+    (1, 2, 1),
+    (2, 1, 1),
+    (4, 5, 1),
+    (5, 4, 1),
+    (7, 8, 1),
+    (8, 7, 1),
+    (3, 1, 1),
+    (6, 4, 0),
+]
+# END DATA for seeding
+
+@asynccontextmanager
+async def lifespan (app: FastAPI):
+    conn = psycopg2.connect(local_db)
+    cur = conn.cursor()
+    cur. execute(
+        """
+        SELECT COUNT (*)
+        FROM Users;
+        """
+    )
+    count = cur.fetchone()[0]
+    if count==0:
+        cur.executemany(
+            """
+            INSERT INTO Users (user_id, email, password_hash) 
+            VALUES (%s, %s, %s)""",
+            users
+        )
+        cur.executemany(
+            """
+            INSERT INTO Profiles (profile_id, display_name, bio, zodiac)
+            VALUES (%s, %s, %s, %s)""",
+            profiles
+        )
+        cur.executemany(
+            """
+            INSERT INTO Likes (liker, liked, likes_status)
+            VALUES (%s, %s, %s)""",
+            likes
+        )
+        conn.commit()
+
+    cur.close()
+    conn.close()
+    yield
+
+app = FastAPI(lifespan=lifespan)
+
+app.add_middleware(
+    CORSMiddleware,
+    allow_origins=["http://localhost:8080",],
+    allow_credentials=True,
+    allow_methods=["*"],
+    allow_headers=["*"],
+)
 
 class signup_request_body (BaseModel):
     email: str = Field (max_length= 100)
@@ -291,28 +375,38 @@ async def handle_likes(body: likes_body, session_user: int = Depends(require_ses
     return {"status": "like registered"}
 
 @app.get ("/couples", status_code=200)
-async def present_couples(session_user: int = Depends(require_session)):
+async def present_couples(index: int = 0,session_user: int = Depends(require_session)):
     conn = psycopg2.connect(local_db)
     cur = conn.cursor()
 
     cur.execute("""
-                SELECT *
+                SELECT Paired_with.profile_2, Profiles.display_name, Profiles.bio, Profiles.zodiac
                 FROM Paired_with
-                WHERE profile_1=%s OR profile_2=%s
+                JOIN Profiles ON Paired_with.profile_2 = Profiles.profile_id
+                WHERE Paired_with.profile_1=%s
+
+                UNION
+
+                SELECT Paired_with.profile_1, Profiles.display_name, Profiles.bio, Profiles.zodiac
+                FROM Paired_with
+                JOIN Profiles ON Paired_with.profile_1 = Profiles.profile_id
+                WHERE Paired_with.profile_2=%s
+
+                LIMIT 1 OFFSET %s;
                 """,
-                (session_user, session_user)
+                (session_user, session_user, index)
                 )
-    couple = cur.fetchall()
+    couple = cur.fetchone()
     cur.close()
     conn.close()
 
+    if couple is None:
+        return None
+
     return{
-        "mutual likes": [
-            {"profile_1": row[0], "profile_2": row[1]}
-            for row in couple
-        ]
+        "profile_id": couple[0],
+        "display_name": couple[1],
+        "bio": couple[2],
+        "zodiac": couple[3]
     }
 
-
-# def main():
-#     print("Hello from mystic!")

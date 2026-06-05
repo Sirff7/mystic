@@ -1,0 +1,10 @@
+# Setup
+1. Navigate to the project folder in the terminal
+2. Run: 'chmod +setup.sh'
+3. Run: './setup.sh'
+4. Run: 'uv run fastapi dev main.py'
+
+# Test Accounts
+Ten test users available. Example:
+- Email: 'anders@mail.com'
+- Password: 'password1'
