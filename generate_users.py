@@ -14,36 +14,50 @@ def generate_users (n:int):
         'Capricorn',
         'Aquarius',
         'Pisces']
-    names = ['anders',
-             'bente',
-             'cordelia',
-             'dennis',
-             'egon',
-             'filip',
-             'gudrun',
-             'holli',
-             'inge',
-             'jakob',
-             'kurt'
+    
+    firstnames = ['anders','bente', 'cordelia', 'dennis','egon',
+             'filip','gudrun','holli','inge','jakob',
+             'kurt', 'lone', 'molly', 'neil', 'ove',
+             'pia', 'quentin', 'rasmus', 'sussy', 'tove',
+             'ulrik', 'vera', 'xerxes', 'yrsa', 'zoro'
              ]
-    bios1 = ['hiking',
-            'coffee',
-            'book',
-            'film',
-            'cat',
-            'basket',
-            'gym',
-            'food',
-            'music',
-            'travel',
-            'computer'
-    ]
-    bios2 = ['lover',
-             'addict',
-             'worm',
-             'nerd',
-             'person',
-    ]
+    surnames = ['andersen', 'bruun', 'christensen', 'dahl','eg',
+             'frederiksen','godtfredsen','hansen','ipsen','jakobsen',
+             'kurtsen', 'lidegaard', 'madsen', 'nielsen', 'olsen',
+             'poulsen', 'quist', 'rasmussen', 'sørensen', 'thomsen'
+            ]  
+    bios0 = ['kind', 'brave', 'sad',
+             'quiet', 'happy', 'happy-go-lucky', 'not so elegant', 'lazy',
+             'creative', 'curious', 'optimistic', 
+             'chaotic', 'restless', 'inddecisive',
+             'confused', 'recovering', 'tired but trying',
+             'mostly harmless', 'sleepy', 'soft', 'cheerful', 'unconventional'
+             ]
+    bios1 = ['hiking', 'coffee', 'book', 'film', 'cat',
+             'basket', 'gym', 'food', 'music', 'travel',
+             'computer', 'morning', 'evening', 'everyday', 'energy',
+             'chaos', 'main character', 'life', 'lifestyle',
+             'tv', 'routine', 'garden', 'knitting', 'water', 'zoo', 'nature',
+             'architecture', 
+            ]
+    bios2 = ['lover', 'addict', 'agent', 'fan', 'scholar', 'collector',
+             'nerd', 'person', 'professional', 'coach', 'persona', 'observer',
+             'connoisseur'
+            ]
+    bios3 = [' gone wrong', ' at heart', ' in training', ' in denial',
+             '', '', '', '', '', '', '', '', '', '', '', '', '', ''
+            ]
+    bios4 = ['loves', 'adores', 'dislikes', 'fond of', 'prefers', 'loves', 'believes in',
+             'likes', 'is done with', 'will defend', 'gave up on', 'never understood',
+              'is obsessed with', 'is suspicios of', 'is here for', 'has strong opinions on'
+            ]   
+    bios5 = ['sunshine', 'discipline', 'copenhagen', 'funny hats', 'high standards', 'high goals', 'bad jokes',
+             'kindness', 'a cozy mind', 'mindfulness', 'peaceful mornings', 'sleeping', 'singing',
+             'big dreams', 'kindness', 'learning', 'boring content', 'pretty things',
+             'photos', 'inspirational quotes', 'painting', 'overthinking', 'airplane mode', 'good company',
+             'country music', 'politics', 'park life', 'a good laugh', 'ufos', 'birds', 'fishing', 'fitness'
+             ]
+      
     valid_matches = [('Aries', 'Leo'),
         ('Aries', 'Sagittarius'),
         ('Taurus', 'Virgo'),
@@ -69,17 +83,21 @@ def generate_users (n:int):
         ('Pisces', 'Cancer'),
         ('Pisces', 'Scorpio')]
     
-    
-    profiles = [(i, names[i % len(names)], f"{random.choice(bios1)} {random.choice(bios2)} bla bla bla", random.choice(zodiacs)) for i in range(1, n+1)]
-    raw_users = [(i, f"{names[i % len(names)]}_{i}@mail.com", f"password{i}") for i in range(1, n+1)]
+
+    profiles = [(i, f"{firstnames[i % len(firstnames)]} {random.choice(surnames)}",
+                 f"{random.choice(bios0)} {random.choice(bios1)} {random.choice(bios2)}{random.choice(bios3)}, {random.choice(bios4)} {random.choice(bios5)}",
+                 random.choice(zodiacs)) for i in range(1, n+1)]
+    raw_users = [(i, f"{firstnames[i % len(firstnames)]}_{i}@mail.com", f"password{i}") for i in range(1, n+1)]
     zodiac_lookup = {id:zodiac for id, name , bio, zodiac in profiles}
-    # likes = [(i, 1, random.choice(likes_status)) for i in range(2,n+1)]+[(1, i, random.choice(likes_status)) for i in range(2,n+1) if i%2 == 0]
     likes = [
         (liker, liked, random.choice([0, 1]))
         for liker, liked in [(i, 1) for i in range(2, n+1)] + [(1, i) for i in range(2, n+1) if i%2 == 0]
         if (zodiac_lookup[liker], zodiac_lookup[liked]) in valid_matches
     ]
     return  raw_users, profiles, likes
+
+# raw_users, profiles, likes = generate_users(100)
+# print ([(b, c) for a, b, c, d in profiles])
 
 
 
