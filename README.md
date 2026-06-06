@@ -4,7 +4,7 @@
 3. Run: './setup.sh'
 4. Run: 'uv run fastapi dev main.py'
 
-# Test Accounts
-Ten test users available. Example:
-- Email: 'anders@mail.com'
+# Test Account
+To try the app please log in as Bente:
+- Email: 'bente_1@mail.com'
 - Password: 'password1'

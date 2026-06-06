@@ -6,48 +6,17 @@ import bcrypt
 from typing import Annotated
 from contextlib import asynccontextmanager
 from fastapi.middleware.cors import CORSMiddleware
+from generate_users import generate_users
 
 local_db = "dbname=mystic"
 _email_re = r"[a-zA-Z0-9._%+-]+@[a-zA-Z0-9.-]+\.[a-zA-Z]{2,}"
 
 # DATA for seeding:
-raw_users = [
-    (1, "anders@mail.com", "password1"),
-    (2, "bente@mail.com", "password2"),
-    (3, "cordelia@mail.com", "password3"),
-    (4, "dorit@mail.com", "password4"),
-    (5, "egon@mail.com", "password5"),
-    (6, "filip@mail.com", "password6"),
-    (7, "gudrun@mail.com", "password7"),
-    (8, "holli@mail.com", "password8"),
-    (9, "inge@mail.com", "password9"),
-    (10, "jakob@mail.com", "password10"),
-]
+raw_users, profiles, likes = generate_users(1000)
+test_salt = bcrypt.gensalt(rounds=4)
 users = [
-    (user_id, email, bcrypt.hashpw(password.encode(), bcrypt.gensalt()).decode())
+    (user_id, email, bcrypt.hashpw(password.encode(), test_salt).decode())
     for user_id, email, password in raw_users
-]
-profiles = [
-    (1, "anders", "Loves hiking", "Aries"),
-    (2, "bente", "Coffee addict", "Leo"),
-    (3, "cordelia", "Book worm", "Sagittarius"),
-    (4, "dorit", "Film nerd", "Taurus"),
-    (5, "egon", "Cat person", "Virgo"),
-    (6, "filip", "Gym rat", "Capricorn"),
-    (7, "gudrun", "Foodie", "Gemini"),
-    (8, "holli", "Music lover", "Libra"),
-    (9, "inge", "Travel junkie", "Cancer"),
-    (10, "jakob", "Gamer", "Scorpio"),
-]
-likes = [
-    (1, 2, 1),
-    (2, 1, 1),
-    (4, 5, 1),
-    (5, 4, 1),
-    (7, 8, 1),
-    (8, 7, 1),
-    (3, 1, 1),
-    (6, 4, 0),
 ]
 # END DATA for seeding
 
