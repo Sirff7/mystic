@@ -329,6 +329,7 @@ async def discover(body: DiscoverRequest):
         FROM Profiles p
         JOIN Matches m ON (m.zodiac_1=%s AND m.zodiac_2=p.zodiac)
         WHERE p.profile_id!= %s AND p.profile_id NOT IN (SELECT liked FROM Likes WHERE liker=%s)
+        ORDER BY RANDOM()
         LIMIT 1;
         """,
         (own_zodiac[0], body.profile_id, body.profile_id),
