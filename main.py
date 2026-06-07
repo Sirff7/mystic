@@ -11,14 +11,13 @@ from generate_users import generate_users
 local_db = "dbname=mystic"
 _email_re = r"[a-zA-Z0-9._%+-]+@[a-zA-Z0-9.-]+\.[a-zA-Z]{2,}"
 
-# DATA for seeding:
+
 raw_users, profiles, likes = generate_users(1000)
 test_salt = bcrypt.gensalt(rounds=4)
 users = [
     (user_id, email, bcrypt.hashpw(password.encode(), test_salt).decode())
     for user_id, email, password in raw_users
 ]
-# END DATA for seeding
 
 @asynccontextmanager
 async def lifespan (app: FastAPI):
@@ -51,7 +50,7 @@ async def lifespan (app: FastAPI):
             likes
         )
         conn.commit()
-
+    cur.execute("SELECT setval('users_user_id_seq', (SELECT MAX(user_id) FROM Users));")
     cur.close()
     conn.close()
     yield
