@@ -283,7 +283,7 @@ fn Profiletabsform(profile_id: i32) -> Element {
                             id: "display_name",
                             name: "display_name",
                             r#type: "text",
-                            placeholder: "Niels",
+                            placeholder: "Write your name",
                             value: display_name(),
                             oninput: move |event: Event<FormData>| {
                                 display_name.set(event.value());
@@ -306,7 +306,7 @@ fn Profiletabsform(profile_id: i32) -> Element {
                             id: "zodiac",
                             name: "zodiac",
                             r#type: "text",
-                            placeholder: "Virgo",
+                            placeholder: "Write your zodiac sign",
                             value: zodiac(),
                             oninput: move |event: Event<FormData>| {
                                 zodiac.set(event.value());
@@ -398,7 +398,6 @@ pub fn Matchcard(profile_id: i32) -> Element {
         }
     }
 }
-
 #[component]
 fn Matchtabs(profile_id: i32) -> Element {
     let mut index = use_signal(|| 0);
@@ -406,25 +405,25 @@ fn Matchtabs(profile_id: i32) -> Element {
     let mut error = use_signal(|| None::<String>);
     let mut loading = use_signal(|| false);
 
-    let load_match = move |new_index: i32| async move {
-        loading.set(true);
-        error.set(None);
+    use_effect(move || {
+        spawn(async move {
+            loading.set(true);
+            error.set(None);
 
-        let result = get_matches(profile_id, new_index).await;
+            let result = get_matches(profile_id, index()).await;
 
-        loading.set(false);
+            loading.set(false);
 
-        match result {
-            Ok(profile) => {
-                index.set(new_index);
-                current_match.set(Some(profile));
+            match result {
+                Ok(profile) => {
+                    current_match.set(Some(profile));
+                }
+                Err(err) => {
+                    error.set(Some(format!("Could not load match: {err}")));
+                }
             }
-            Err(err) => {
-                error.set(Some(format!("Could not load match: {err}")));
-            }
-        }
-    };
-
+        });
+    });
     rsx! {
         div {
             Tabs {
@@ -433,27 +432,12 @@ fn Matchtabs(profile_id: i32) -> Element {
                 max_width: "16rem",
 
                 TabList {
-                    TabTrigger {
-                        value: "tab1".to_string(),
-                        index: 0usize,
-                        "Name"
-                    }
-                    TabTrigger {
-                        value: "tab2".to_string(),
-                        index: 1usize,
-                        "Zodiac"
-                    }
-                    TabTrigger {
-                        value: "tab3".to_string(),
-                        index: 2usize,
-                        "Bio"
-                    }
+                    TabTrigger { value: "tab1".to_string(), index: 0usize, "Name" }
+                    TabTrigger { value: "tab2".to_string(), index: 1usize, "Zodiac" }
+                    TabTrigger { value: "tab3".to_string(), index: 2usize, "Bio" }
                 }
 
-                TabContent {
-                    index: 0usize,
-                    value: "tab1".to_string(),
-
+                TabContent { index: 0usize, value: "tab1".to_string(),
                     div {
                         width: "100%",
                         height: "5rem",
@@ -469,10 +453,7 @@ fn Matchtabs(profile_id: i32) -> Element {
                     }
                 }
 
-                TabContent {
-                    index: 1usize,
-                    value: "tab2".to_string(),
-
+                TabContent { index: 1usize, value: "tab2".to_string(),
                     div {
                         width: "100%",
                         height: "5rem",
@@ -488,10 +469,7 @@ fn Matchtabs(profile_id: i32) -> Element {
                     }
                 }
 
-                TabContent {
-                    index: 2usize,
-                    value: "tab3".to_string(),
-
+                TabContent { index: 2usize, value: "tab3".to_string(),
                     div {
                         width: "100%",
                         height: "5rem",
@@ -515,9 +493,28 @@ fn Matchtabs(profile_id: i32) -> Element {
                     variant: ButtonVariant::Primary,
                     r#type: "button",
                     disabled: index() <= 0 || loading(),
-                    onclick: move |_| {
-                        spawn(load_match(index() - 1));
+
+                    onclick: move |_| async move {
+                        let new_index = index() - 1;
+
+                        loading.set(true);
+                        error.set(None);
+
+                        let result = get_matches(profile_id, new_index).await;
+
+                        loading.set(false);
+
+                        match result {
+                            Ok(profile) => {
+                                index.set(new_index);
+                                current_match.set(Some(profile));
+                            }
+                            Err(err) => {
+                                error.set(Some(format!("Could not load previous match: {err}")));
+                            }
+                        }
                     },
+
                     "Previous"
                 }
 
@@ -525,9 +522,28 @@ fn Matchtabs(profile_id: i32) -> Element {
                     variant: ButtonVariant::Primary,
                     r#type: "button",
                     disabled: loading(),
-                    onclick: move |_| {
-                        spawn(load_match(index() + 1));
+
+                    onclick: move |_| async move {
+                        let new_index = index() + 1;
+
+                        loading.set(true);
+                        error.set(None);
+
+                        let result = get_matches(profile_id, new_index).await;
+
+                        loading.set(false);
+
+                        match result {
+                            Ok(profile) => {
+                                index.set(new_index);
+                                current_match.set(Some(profile));
+                            }
+                            Err(err) => {
+                                error.set(Some(format!("Could not load next match: {err}")));
+                            }
+                        }
                     },
+
                     "Next"
                 }
             }
