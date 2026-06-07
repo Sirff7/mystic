@@ -19,7 +19,7 @@ def generate_users (n:int):
              'filip','gudrun','holli','inge','jakob',
              'kurt', 'lone', 'molly', 'neil', 'ove',
              'pia', 'quentin', 'rasmus', 'sussy', 'tove',
-             'ulrik', 'vera', 'xerxes', 'yrsa', 'zoro'
+             'ulrik', 'vera', 'xavier', 'yrsa', 'zoro'
              ]
     surnames = ['andersen', 'bruun', 'christensen', 'dahl','eg',
              'frederiksen','godtfredsen','hansen','ipsen','jakobsen',
@@ -47,8 +47,8 @@ def generate_users (n:int):
     bios3 = [' gone wrong', ' at heart', ' in training', ' in denial',
              '', '', '', '', '', '', '', '', '', '', '', '', '', ''
             ]
-    bios4 = ['loves', 'adores', 'dislikes', 'fond of', 'prefers', 'loves', 'believes in',
-             'likes', 'is done with', 'will defend', 'gave up on', 'never understood',
+    bios4 = ['loves', 'adores', 'dislikes', 'fond of', 'prefers', 'believes in',
+             'likes', 'is done with', 'will always defend', 'gave up on', 'never understood',
               'is obsessed with', 'is suspicios of', 'is here for', 'has strong opinions on'
             ]   
     bios5 = ['sunshine', 'discipline', 'copenhagen', 'funny hats', 'high standards', 'high goals', 'bad jokes',
@@ -95,9 +95,6 @@ def generate_users (n:int):
         if (zodiac_lookup[liker], zodiac_lookup[liked]) in valid_matches
     ]
     return  raw_users, profiles, likes
-
-# raw_users, profiles, likes = generate_users(100)
-# print ([(b, c) for a, b, c, d in profiles])
 
 
 
