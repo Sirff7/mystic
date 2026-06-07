@@ -3,6 +3,8 @@ use crate::api::models::DiscoveryRequest;
 use crate::api::models::DiscoveryResponse;
 use crate::api::models::LikeRequest;
 use crate::api::models::MatchResponse;
+use crate::api::models::ProfileRequest;
+use crate::api::models::ProfileResponse;
 use crate::api::models::UpdateProfileRequest;
 use crate::components::button::{Button, ButtonVariant};
 use crate::components::card::*;
@@ -167,6 +169,18 @@ fn Profiletabs(display_name: String, bio: String, zodiac: String) -> Element {
     }
 }
 // Profile updating
+async fn get_profile(profile_id: i32) -> Result<ProfileResponse, reqwest::Error> {
+    let profile = reqwest::Client::new()
+        .get(format!("http://localhost:8000/profiles/{profile_id}"))
+        .send()
+        .await?
+        .error_for_status()?
+        .json::<ProfileResponse>()
+        .await?;
+
+    Ok(profile)
+}
+
 async fn update_profile(
     profile_id: i32,
     display_name: String,
@@ -215,6 +229,29 @@ fn Profiletabsform(profile_id: i32) -> Element {
     let mut success = use_signal(|| None::<String>);
     let mut error = use_signal(|| None::<String>);
     let mut loading = use_signal(|| false);
+    let mut profile_loading = use_signal(|| true);
+
+    use_effect(move || {
+        spawn(async move {
+            profile_loading.set(true);
+            error.set(None);
+
+            let result = get_profile(profile_id).await;
+
+            profile_loading.set(false);
+
+            match result {
+                Ok(profile) => {
+                    display_name.set(profile.display_name);
+                    bio.set(profile.bio);
+                    zodiac.set(profile.zodiac);
+                }
+                Err(err) => {
+                    error.set(Some(format!("Could not load profile: {err}")));
+                }
+            }
+        });
+    });
 
     rsx! {
         form {
@@ -246,6 +283,13 @@ fn Profiletabsform(profile_id: i32) -> Element {
                 }
             },
 
+            if profile_loading() {
+                p {
+                    style: "font-size: 0.875rem;",
+                    "Loading profile..."
+                }
+            }
+
             Tabs {
                 default_value: "tab1".to_string(),
                 horizontal: true,
@@ -276,7 +320,7 @@ fn Profiletabsform(profile_id: i32) -> Element {
                     div { style: "display: grid; gap: 0.5rem;",
                         Label {
                             html_for: "display_name",
-                            "New name:"
+                            "Name:"
                         }
 
                         Input {
@@ -299,7 +343,7 @@ fn Profiletabsform(profile_id: i32) -> Element {
                     div { style: "display: grid; gap: 0.5rem;",
                         Label {
                             html_for: "zodiac",
-                            "New zodiac:"
+                            "Zodiac:"
                         }
 
                         Input {
@@ -322,15 +366,25 @@ fn Profiletabsform(profile_id: i32) -> Element {
                     div { style: "display: grid; gap: 0.5rem;",
                         Label {
                             html_for: "bio",
-                            "New bio:"
+                            "Bio:"
                         }
 
-                        Input {
+                        textarea {
                             id: "bio",
                             name: "bio",
-                            r#type: "text",
                             placeholder: "Write something about yourself",
-                            value: bio(),
+                            value: "{bio()}",
+                            rows: "5",
+                            style: "
+                                width: 100%;
+                                min-height: 8rem;
+                                resize: vertical;
+                                padding: 0.5rem 0.75rem;
+                                border: 1px solid #ccc;
+                                border-radius: 0.375rem;
+                                font: inherit;
+                            ",
+
                             oninput: move |event: Event<FormData>| {
                                 bio.set(event.value());
                             }
@@ -343,6 +397,8 @@ fn Profiletabsform(profile_id: i32) -> Element {
                 variant: ButtonVariant::Primary,
                 r#type: "submit",
                 style: "width: 100%; margin-top: 1rem;",
+                disabled: loading() || profile_loading(),
+
                 if loading() {
                     "Updating..."
                 } else {
@@ -366,7 +422,6 @@ fn Profiletabsform(profile_id: i32) -> Element {
         }
     }
 }
-
 // Matches
 async fn get_matches(profile_id: i32, index: i32) -> Result<MatchResponse, reqwest::Error> {
     let matched_profile = reqwest::Client::new()

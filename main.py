@@ -276,7 +276,7 @@ async def update_profile(body: update_profile_body):
 
 
 @app.get("/profiles/{profile_id}", status_code=200)
-async def show_profile(profile_id: int, session_user: int = Depends(require_session)):
+async def show_profile(profile_id: int):
     conn = psycopg2.connect(local_db)
     cur = conn.cursor()
 
