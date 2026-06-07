@@ -1,11 +1,13 @@
-import psycopg2
-from fastapi import FastAPI, Response, Depends, Cookie, HTTPException
-from pydantic import BaseModel, Field
 import re
-import bcrypt
-from typing import Annotated
 from contextlib import asynccontextmanager
+from typing import Annotated
+
+import bcrypt
+import psycopg2
+from fastapi import Cookie, Depends, FastAPI, HTTPException, Response
 from fastapi.middleware.cors import CORSMiddleware
+from pydantic import BaseModel, Field
+
 from generate_users import generate_users
 
 local_db = "dbname=mystic"
@@ -19,35 +21,36 @@ users = [
     for user_id, email, password in raw_users
 ]
 
+
 @asynccontextmanager
-async def lifespan (app: FastAPI):
+async def lifespan(app: FastAPI):
     conn = psycopg2.connect(local_db)
     cur = conn.cursor()
-    cur. execute(
+    cur.execute(
         """
         SELECT COUNT (*)
         FROM Users;
         """
     )
     count = cur.fetchone()[0]
-    if count==0:
+    if count == 0:
         cur.executemany(
             """
             INSERT INTO Users (user_id, email, password_hash) 
             VALUES (%s, %s, %s)""",
-            users
+            users,
         )
         cur.executemany(
             """
             INSERT INTO Profiles (profile_id, display_name, bio, zodiac)
             VALUES (%s, %s, %s, %s)""",
-            profiles
+            profiles,
         )
         cur.executemany(
             """
             INSERT INTO Likes (liker, liked, likes_status)
             VALUES (%s, %s, %s)""",
-            likes
+            likes,
         )
         conn.commit()
     cur.execute("SELECT setval('users_user_id_seq', (SELECT MAX(user_id) FROM Users));")
@@ -55,26 +58,32 @@ async def lifespan (app: FastAPI):
     conn.close()
     yield
 
+
 app = FastAPI(lifespan=lifespan)
 
 app.add_middleware(
     CORSMiddleware,
-    allow_origins=["http://localhost:8080",],
+    allow_origins=[
+        "http://localhost:8080",
+        "http://127.0.0.1:8080",
+    ],
     allow_credentials=True,
     allow_methods=["*"],
     allow_headers=["*"],
 )
 
-class signup_request_body (BaseModel):
-    email: str = Field (max_length= 100)
-    password: str = Field (max_length= 255)
 
-@app.post ("/users", status_code=201)
+class signup_request_body(BaseModel):
+    email: str = Field(max_length=100)
+    password: str = Field(max_length=255)
+
+
+@app.post("/users", status_code=201)
 async def handle_signup(body: signup_request_body):
     is_email = re.fullmatch(_email_re, body.email)
     if is_email is None:
         raise HTTPException(status_code=400, detail="mail not valid")
-    
+
     hashed = bcrypt.hashpw(body.password.encode(), bcrypt.gensalt()).decode()
 
     conn = psycopg2.connect(local_db)
@@ -94,7 +103,7 @@ async def handle_signup(body: signup_request_body):
             INSERT INTO Profiles (profile_id, display_name, bio, zodiac)
             VALUES ( %s, NULL, NULL, NULL)
             """,
-            (user_id[0],)
+            (user_id[0],),
         )
         conn.commit()
     except psycopg2.errors.UniqueViolation:
@@ -105,12 +114,14 @@ async def handle_signup(body: signup_request_body):
 
     return {"status": "signup - ok", "user_id": user_id[0]}
 
-class login_request_body (BaseModel):
-    email: str = Field (max_length= 100)
-    password: str = Field (max_length= 255)
 
-@app.post ("/sessions", status_code=201)
-async def handle_login(body: login_request_body,response: Response):
+class login_request_body(BaseModel):
+    email: str = Field(max_length=100)
+    password: str = Field(max_length=255)
+
+
+@app.post("/sessions", status_code=201)
+async def handle_login(body: login_request_body, response: Response):
     conn = psycopg2.connect(local_db)
     cur = conn.cursor()
     cur.execute(
@@ -118,9 +129,9 @@ async def handle_login(body: login_request_body,response: Response):
         SELECT user_id, password_hash FROM Users
         WHERE email=%s;
         """,
-        (body.email,)
+        (body.email,),
     )
-    user=cur.fetchone()
+    user = cur.fetchone()
 
     if user is None:
         raise HTTPException(status_code=401, detail="Unauthenticated")
@@ -128,24 +139,25 @@ async def handle_login(body: login_request_body,response: Response):
     if bcrypt.checkpw(body.password.encode(), user[1].encode()) is False:
         raise HTTPException(status_code=401, detail="Unauthenticated")
 
-    cur.execute(  
-            """
+    cur.execute(
+        """
             INSERT INTO Sessions (user_id)
             VALUES (%s)
             RETURNING token;
             """,
-            (user[0],)
+        (user[0],),
     )
     session = cur.fetchone()
     response.set_cookie(key="newsession", value=session[0], max_age=86400)
-    
+
     conn.commit()
     cur.close()
     conn.close()
 
     return {"status": "login - ok", "user_id": user[0]}
 
-async def require_session (newsession: Annotated[str | None, Cookie()] = None):
+
+async def require_session(newsession: Annotated[str | None, Cookie()] = None):
     token = newsession
     conn = psycopg2.connect(local_db)
     cur = conn.cursor()
@@ -154,81 +166,92 @@ async def require_session (newsession: Annotated[str | None, Cookie()] = None):
         SELECT user_id FROM Sessions
         WHERE token=%s AND created_at >= NOW()- INTERVAL '24 hour';
         """,
-        (token,)
+        (token,),
     )
-    session_user=cur.fetchone()
+    session_user = cur.fetchone()
     cur.close()
     conn.close()
 
     if session_user is None:
         raise HTTPException(status_code=401, detail="unauthenticated")
-    
+
     return session_user[0]
 
-@app.get ("/me", status_code=200)
-async def show_self (session_user: int = Depends(require_session)):
+
+@app.get("/me", status_code=200)
+async def show_self(session_user: int = Depends(require_session)):
     conn = psycopg2.connect(local_db)
     cur = conn.cursor()
-     
-    cur.execute("""
+
+    cur.execute(
+        """
         SELECT user_id, email
         FROM Users
         WHERE user_id = %s
         """,
-        (session_user,))
-    
+        (session_user,),
+    )
+
     user = cur.fetchone()
     cur.close()
     conn.close()
-    
-    return{
-        "user_id": user[0],
-        "email": user[1]
-    }
 
-@app.delete ("/sessions", status_code=200)
-async def handle_logout (response: Response, session_user: int = Depends(require_session)):
+    return {"user_id": user[0], "email": user[1]}
+
+
+@app.delete("/sessions", status_code=200)
+async def handle_logout(
+    response: Response, session_user: int = Depends(require_session)
+):
     conn = psycopg2.connect(local_db)
-    cur = conn.cursor()  
-    cur.execute("""
+    cur = conn.cursor()
+    cur.execute(
+        """
         DELETE FROM Sessions
         WHERE user_id = %s
         """,
-        (session_user,)
-        )
+        (session_user,),
+    )
     conn.commit()
     cur.close()
     conn.close()
-    
-    response.delete_cookie(key="newsession")
-    
-    return{"status": "session ended"}
 
-@app.delete ("/users", status_code=200)
-async def delete_account (response: Response, session_user: int = Depends(require_session)):
+    response.delete_cookie(key="newsession")
+
+    return {"status": "session ended"}
+
+
+@app.delete("/users", status_code=200)
+async def delete_account(
+    response: Response, session_user: int = Depends(require_session)
+):
     conn = psycopg2.connect(local_db)
     cur = conn.cursor()
-    cur.execute("""
+    cur.execute(
+        """
         DELETE FROM Users
         WHERE user_id = %s
         """,
-        (session_user,)
-        )
+        (session_user,),
+    )
     conn.commit()
     cur.close()
     conn.close()
 
     response.delete_cookie(key="newsession")
 
-    return{"status": "user and profile deleted"}
+    return {"status": "user and profile deleted"}
 
-class update_profile_body (BaseModel):
-    display_name: str = Field (max_length= 20)
-    bio: str = Field (max_length= 1000)
-    zodiac: str = Field (max_length= 20)
 
-@app.put ("/profiles", status_code=200)
-async def update_profile(body: update_profile_body, session_user: int = Depends(require_session)):
+class update_profile_body(BaseModel):
+    profile_id: int
+    display_name: str = Field(max_length=20)
+    bio: str = Field(max_length=1000)
+    zodiac: str = Field(max_length=20)
+
+
+@app.put("/profiles", status_code=200)
+async def update_profile(body: update_profile_body):
     conn = psycopg2.connect(local_db)
     cur = conn.cursor()
     try:
@@ -238,7 +261,7 @@ async def update_profile(body: update_profile_body, session_user: int = Depends(
             SET display_name=%s, bio=%s, zodiac=%s 
             WHERE profile_id=%s;
             """,
-            (body.display_name, body.bio, body.zodiac, session_user)
+            (body.display_name, body.bio, body.zodiac, body.profile_id),
         )
         conn.commit()
     except psycopg2.errors.ForeignKeyViolation:
@@ -252,74 +275,87 @@ async def update_profile(body: update_profile_body, session_user: int = Depends(
     return {"status": "profile updated"}
 
 
-@app.get ("/profiles/{profile_id}", status_code=200)
-async def show_profile (profile_id: int, session_user: int = Depends(require_session)):
+@app.get("/profiles/{profile_id}", status_code=200)
+async def show_profile(profile_id: int, session_user: int = Depends(require_session)):
     conn = psycopg2.connect(local_db)
     cur = conn.cursor()
-     
-    cur.execute("""
+
+    cur.execute(
+        """
         SELECT profile_id, display_name, bio, zodiac
         FROM Profiles
         WHERE profile_id = %s
         """,
-        (profile_id,))
-    
+        (profile_id,),
+    )
+
     profile = cur.fetchone()
     cur.close()
     conn.close()
 
     if profile is None:
         raise HTTPException(status_code=404, detail="profile not found")
-    
-    return{
+
+    return {
         "profile_id": profile[0],
         "display_name": profile[1],
         "bio": profile[2],
-        "zodiac": profile[3]
+        "zodiac": profile[3],
     }
 
-@app.get ("/discoveries", status_code=200)
-async def discover(session_user: int = Depends(require_session)):
+
+class DiscoverRequest(BaseModel):
+    profile_id: int
+
+
+@app.post("/discoveries", status_code=200)
+async def discover(body: DiscoverRequest):
     conn = psycopg2.connect(local_db)
     cur = conn.cursor()
 
-    cur.execute("""
+    cur.execute(
+        """
         SELECT zodiac 
         FROM Profiles
         WHERE profile_id = %s
         """,
-        (session_user,) 
+        (body.profile_id,),
     )
     own_zodiac = cur.fetchone()
 
-    cur.execute("""
+    cur.execute(
+        """
         SELECT p.profile_id, p.display_name, p.bio, p.zodiac
         FROM Profiles p
         JOIN Matches m ON (m.zodiac_1=%s AND m.zodiac_2=p.zodiac)
         WHERE p.profile_id!= %s AND p.profile_id NOT IN (SELECT liked FROM Likes WHERE liker=%s)
         LIMIT 1;
         """,
-        (own_zodiac[0], session_user, session_user))
+        (own_zodiac[0], body.profile_id, body.profile_id),
+    )
     profile = cur.fetchone()
     cur.close()
     conn.close()
 
     if profile is None:
         return None
-    
-    return{
+
+    return {
         "profile_id": profile[0],
         "display_name": profile[1],
         "bio": profile[2],
-        "zodiac": profile[3]
+        "zodiac": profile[3],
     }
 
-class likes_body (BaseModel):
-    liked: int
-    likes_status: int
 
-@app.post ("/likes", status_code=201)
-async def handle_likes(body: likes_body, session_user: int = Depends(require_session)):
+class likes_body(BaseModel):
+    liker_id: int
+    liked_id: int
+    status: int
+
+
+@app.post("/likes", status_code=201)
+async def handle_likes(body: likes_body):
     conn = psycopg2.connect(local_db)
     cur = conn.cursor()
     try:
@@ -328,26 +364,35 @@ async def handle_likes(body: likes_body, session_user: int = Depends(require_ses
             INSERT INTO Likes (liker, liked, likes_status)
             VALUES (%s, %s, %s);
             """,
-            (session_user, body.liked, body.likes_status)
+            (body.liker_id, body.liked_id, body.status),
         )
     except psycopg2.errors.ForeignKeyViolation:
         conn.rollback()
         raise HTTPException(status_code=404, detail="other profile not found")
     except psycopg2.errors.UniqueViolation:
         conn.rollback()
-        raise HTTPException(status_code=409, detail="like or dislike already registered") 
+        raise HTTPException(
+            status_code=409, detail="like or dislike already registered"
+        )
     conn.commit()
     cur.close()
     conn.close()
 
     return {"status": "like registered"}
 
-@app.get ("/couples", status_code=200)
-async def present_couples(index: int = 0,session_user: int = Depends(require_session)):
+
+class CouplesRequest(BaseModel):
+    profile_id: int
+    index: int
+
+
+@app.post("/couples", status_code=200)
+async def present_couples(body: CouplesRequest):
     conn = psycopg2.connect(local_db)
     cur = conn.cursor()
 
-    cur.execute("""
+    cur.execute(
+        """
                 SELECT Paired_with.profile_2, Profiles.display_name, Profiles.bio, Profiles.zodiac
                 FROM Paired_with
                 JOIN Profiles ON Paired_with.profile_2 = Profiles.profile_id
@@ -362,8 +407,8 @@ async def present_couples(index: int = 0,session_user: int = Depends(require_ses
 
                 LIMIT 1 OFFSET %s;
                 """,
-                (session_user, session_user, index)
-                )
+        (body.profile_id, body.profile_id, body.index),
+    )
     couple = cur.fetchone()
     cur.close()
     conn.close()
@@ -371,10 +416,9 @@ async def present_couples(index: int = 0,session_user: int = Depends(require_ses
     if couple is None:
         return None
 
-    return{
+    return {
         "profile_id": couple[0],
         "display_name": couple[1],
         "bio": couple[2],
-        "zodiac": couple[3]
+        "zodiac": couple[3],
     }
-
